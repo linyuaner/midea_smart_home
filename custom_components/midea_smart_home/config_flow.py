@@ -138,13 +138,10 @@ class MideaSmartHomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         existing_device_ids = {d.get(CONF_DEVICE_ID) for d in self._devices_data}
-        _LOGGER.debug("Existing device IDs: %s", existing_device_ids)
-        _LOGGER.debug("Discovered devices before filtering: %s", self._discovered_devices)
         self._discovered_devices = {
             did: info for did, info in self._discovered_devices.items()
             if did not in existing_device_ids
         }
-        _LOGGER.debug("Discovered devices after filtering: %s", self._discovered_devices)
 
         if not self._discovered_devices:
             return self.async_show_form(
@@ -642,13 +639,10 @@ class MideaSmartHomeOptionsFlowHandler(config_entries.OptionsFlow):
             )
 
         existing_device_ids = {d.get(CONF_DEVICE_ID) for d in self._devices_data}
-        _LOGGER.debug("Existing device IDs: %s", existing_device_ids)
-        _LOGGER.debug("Discovered devices before filtering: %s", self._discovered_devices)
         self._discovered_devices = {
             did: info for did, info in self._discovered_devices.items()
             if did not in existing_device_ids
         }
-        _LOGGER.debug("Discovered devices after filtering: %s", self._discovered_devices)
 
         if not self._discovered_devices:
             return self.async_show_form(

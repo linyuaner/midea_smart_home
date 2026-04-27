@@ -80,9 +80,17 @@ def _parse_v1_response(data: bytes, addr: tuple) -> dict | None:
 
 def _parse_v2_v3_response(data: bytes, addr: tuple, security: LocalSecurity) -> dict | None:
     try:
+        _LOGGER.debug(f"Received broadcast from {addr}: {data.hex()}")
+        
+        # 参考 midea_auto_cloud 的实现，检查响应长度
+        if len(data) < 104:
+            _LOGGER.debug("Response too short: %d bytes", len(data))
+            return None
+            
         if data[:2].hex() == "8370" and data[8:10].hex() == "5a5a":
             protocol = ProtocolVersion.V3
-            inner_data = data[8:-16] if len(data) > 24 else data[8:]
+            # 参考 midea_auto_cloud 的实现，直接处理 V3 协议
+            inner_data = data[8:-16]
         elif data[:2].hex() == "5a5a":
             protocol = ProtocolVersion.V2
             inner_data = data
@@ -97,6 +105,8 @@ def _parse_v2_v3_response(data: bytes, addr: tuple, security: LocalSecurity) -> 
             return None
 
         reply = security.aes_decrypt(encrypt_data)
+        _LOGGER.debug(f"Declassified reply: {reply.hex()}")
+        
         if len(reply) < 41:
             _LOGGER.debug("Decrypted data too short: %d bytes", len(reply))
             return None
@@ -108,12 +118,14 @@ def _parse_v2_v3_response(data: bytes, addr: tuple, security: LocalSecurity) -> 
 
         device_type = 0
         
-        # 尝试从 SSID 中解析设备类型
+        # 参考 midea_auto_cloud 的实现，直接从 SSID 中获取设备类型
         if "_" in ssid:
             parts = ssid.split("_")
+            # 尝试从所有部分解析设备类型
             for i in range(1, len(parts)):
                 try:
                     device_type = int(parts[i], 16)
+                    _LOGGER.debug(f"Parsed device type from SSID part {i}: 0x{device_type:02x}")
                     break
                 except ValueError:
                     continue
@@ -185,6 +197,7 @@ def discover_devices(timeout: float = DISCOVERY_TIMEOUT, scan_address: str = "au
             for port in DISCOVERY_PORTS:
                 try:
                     sock.sendto(BROADCAST_MSG, (addr, port))
+                    _LOGGER.debug("Sent broadcast to %s:%d", addr, port)
                 except (socket.error, OSError) as e:
                     _LOGGER.debug("Send to %s:%d failed: %s", addr, port, e)
 
@@ -195,9 +208,9 @@ def discover_devices(timeout: float = DISCOVERY_TIMEOUT, scan_address: str = "au
                 if not ready[0]:
                     break
                 data, addr = sock.recvfrom(512)
-                if len(data) < 40:
-                    continue
-
+                _LOGGER.debug("Received data from %s: %d bytes", addr[0], len(data))
+                
+                # 参考 midea_auto_cloud 的实现，处理不同类型的响应
                 device_info = None
                 if data[:6].hex() == "3c3f786d6c20":
                     device_info = _parse_v1_response(data, addr)
@@ -222,21 +235,20 @@ def discover_devices(timeout: float = DISCOVERY_TIMEOUT, scan_address: str = "au
                     device_id, protocol_name, addr[0], device_info[CONF_DEVICE_TYPE]
                 )
                 devices[device_id] = device_info
-            except (socket.error, OSError):
+            except (socket.error, OSError) as e:
+                _LOGGER.debug("Socket error: %s", str(e))
                 break
 
-    send_broadcast()
-    last_broadcast_time = time.time()
-
-    while time.time() - start_time < timeout:
+    # 参考 midea_auto_cloud 的实现，增加重试次数
+    for retry in range(DISCOVERY_RETRIES):
+        send_broadcast()
+        # 等待响应
+        time.sleep(1.0)
         receive_responses()
-
-        elapsed = time.time() - last_broadcast_time
-        if elapsed >= DISCOVERY_INTERVAL:
-            retry_count = int((time.time() - start_time) / DISCOVERY_INTERVAL)
-            if retry_count < DISCOVERY_RETRIES:
-                send_broadcast()
-                last_broadcast_time = time.time()
+        
+        # 如果指定了具体 IP 且已找到设备，提前结束
+        if scan_address != "auto" and len(devices) > 0:
+            break
 
     sock.close()
     _LOGGER.info("Discovery completed, found %d devices", len(devices))

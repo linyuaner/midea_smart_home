@@ -79,53 +79,63 @@ def _parse_v1_response(data: bytes, addr: tuple) -> dict | None:
         return None
 
 def _parse_v2_v3_response(data: bytes, addr: tuple, security: LocalSecurity) -> dict | None:
-    if data[:2].hex() == "8370" and data[8:10].hex() == "5a5a":
-        protocol = ProtocolVersion.V3
-        inner_data = data[8:-16] if len(data) > 24 else data[8:]
-    elif data[:2].hex() == "5a5a":
-        protocol = ProtocolVersion.V2
-        inner_data = data
-    else:
+    try:
+        if data[:2].hex() == "8370" and data[8:10].hex() == "5a5a":
+            protocol = ProtocolVersion.V3
+            inner_data = data[8:-16] if len(data) > 24 else data[8:]
+        elif data[:2].hex() == "5a5a":
+            protocol = ProtocolVersion.V2
+            inner_data = data
+        else:
+            _LOGGER.debug("Unknown response format: %s", data[:10].hex())
+            return None
+
+        device_id = int.from_bytes(inner_data[20:26], "little")
+        encrypt_data = inner_data[40:-16]
+        if len(encrypt_data) < 16:
+            _LOGGER.debug("Encrypt data too short: %d bytes", len(encrypt_data))
+            return None
+
+        reply = security.aes_decrypt(encrypt_data)
+        if len(reply) < 41:
+            _LOGGER.debug("Decrypted data too short: %d bytes", len(reply))
+            return None
+
+        sn = reply[8:40].decode("utf-8", errors="ignore").rstrip('\x00')
+        ssid_len = reply[40]
+        ssid = reply[41:41+ssid_len].decode("utf-8", errors="ignore") if ssid_len > 0 and len(reply) > 41+ssid_len else ""
+        sn8 = sn[9:17] if len(sn) > 17 else ""
+
+        device_type = 0
+        
+        # 尝试从 SSID 中解析设备类型
+        if "_" in ssid:
+            parts = ssid.split("_")
+            for i in range(1, len(parts)):
+                try:
+                    device_type = int(parts[i], 16)
+                    break
+                except ValueError:
+                    continue
+        
+        # 如果 SSID 中没有找到，尝试从 SN 或其他可能的地方获取
+        if device_type == 0:
+            _LOGGER.debug("Could not parse device type from SSID: %s, will try to get from cloud later", ssid)
+        
+        _LOGGER.debug("Parsed device: ID=%d, IP=%s, Type=0x%x, SN=%s, SSID=%s, Protocol=%s", 
+                     device_id, addr[0], device_type, sn, ssid, protocol)
+        
+        return {
+            CONF_DEVICE_ID: device_id,
+            CONF_IP: addr[0],
+            CONF_DEVICE_TYPE: device_type,
+            CONF_SN: sn,
+            CONF_SN8: sn8,
+            CONF_PROTOCOL: protocol,
+        }
+    except Exception as e:
+        _LOGGER.debug("Error parsing response: %s", str(e))
         return None
-
-    device_id = int.from_bytes(inner_data[20:26], "little")
-    encrypt_data = inner_data[40:-16]
-    if len(encrypt_data) < 16:
-        return None
-
-    reply = security.aes_decrypt(encrypt_data)
-    if len(reply) < 41:
-        return None
-
-    sn = reply[8:40].decode("utf-8", errors="ignore").rstrip('\x00')
-    ssid_len = reply[40]
-    ssid = reply[41:41+ssid_len].decode("utf-8", errors="ignore") if ssid_len > 0 and len(reply) > 41+ssid_len else ""
-    sn8 = sn[9:17] if len(sn) > 17 else ""
-
-    device_type = 0
-    
-    # 尝试从 SSID 中解析设备类型
-    if "_" in ssid:
-        parts = ssid.split("_")
-        for i in range(1, len(parts)):
-            try:
-                device_type = int(parts[i], 16)
-                break
-            except ValueError:
-                continue
-    
-    # 如果 SSID 中没有找到，尝试从 SN 或其他可能的地方获取
-    if device_type == 0:
-        _LOGGER.debug("Could not parse device type from SSID: %s, will try to get from cloud later", ssid)
-    
-    return {
-        CONF_DEVICE_ID: device_id,
-        CONF_IP: addr[0],
-        CONF_DEVICE_TYPE: device_type,
-        CONF_SN: sn,
-        CONF_SN8: sn8,
-        CONF_PROTOCOL: protocol,
-    }
 
 def _parse_scan_address(scan_address: str) -> list:
     if not scan_address or scan_address.lower() == "auto":

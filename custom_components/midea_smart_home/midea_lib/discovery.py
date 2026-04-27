@@ -99,17 +99,25 @@ def _parse_v2_v3_response(data: bytes, addr: tuple, security: LocalSecurity) -> 
 
     sn = reply[8:40].decode("utf-8", errors="ignore").rstrip('\x00')
     ssid_len = reply[40]
-    ssid = reply[41:41+ssid_len].decode("utf-8", errors="ignore")
+    ssid = reply[41:41+ssid_len].decode("utf-8", errors="ignore") if ssid_len > 0 and len(reply) > 41+ssid_len else ""
     sn8 = sn[9:17] if len(sn) > 17 else ""
 
     device_type = 0
+    
+    # 尝试从 SSID 中解析设备类型
     if "_" in ssid:
-        type_str = ssid.split("_")[1]
-        try:
-            device_type = int(type_str, 16)
-        except ValueError:
-            pass
-
+        parts = ssid.split("_")
+        for i in range(1, len(parts)):
+            try:
+                device_type = int(parts[i], 16)
+                break
+            except ValueError:
+                continue
+    
+    # 如果 SSID 中没有找到，尝试从 SN 或其他可能的地方获取
+    if device_type == 0:
+        _LOGGER.debug("Could not parse device type from SSID: %s, will try to get from cloud later", ssid)
+    
     return {
         CONF_DEVICE_ID: device_id,
         CONF_IP: addr[0],

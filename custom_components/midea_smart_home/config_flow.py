@@ -201,6 +201,11 @@ class MideaSmartHomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         for did, info in self._discovered_devices.items():
             cloud_device = self._cloud_devices.get(did, {})
+            # 如果云端有设备信息且 device_type 为 0，用云端的设备类型更新
+            if info[CONF_DEVICE_TYPE] == 0 and cloud_device:
+                cloud_type = cloud_device.get("type", 0)
+                if cloud_type != 0:
+                    info[CONF_DEVICE_TYPE] = cloud_type
             device_name = cloud_device.get("name", DEVICE_TYPES.get(info[CONF_DEVICE_TYPE], f"T0x{info[CONF_DEVICE_TYPE]:02X}"))
             device_options[str(did)] = f"{device_name} ( {info[CONF_IP]} )"
 
@@ -219,6 +224,11 @@ class MideaSmartHomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         for did, info in self._discovered_devices.items():
             cloud_device = self._cloud_devices.get(did, {})
+            # 如果云端有设备信息且 device_type 为 0，用云端的设备类型更新
+            if info[CONF_DEVICE_TYPE] == 0 and cloud_device:
+                cloud_type = cloud_device.get("type", 0)
+                if cloud_type != 0:
+                    info[CONF_DEVICE_TYPE] = cloud_type
             device_name = cloud_device.get("name", DEVICE_TYPES.get(info[CONF_DEVICE_TYPE], f"T0x{info[CONF_DEVICE_TYPE]:02X}"))
             device_options[str(did)] = f"{device_name} ( {info[CONF_IP]} )"
 
@@ -441,6 +451,12 @@ class MideaSmartHomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     current_device[CONF_DEVICE_NAME] = cloud_device.get("name") or current_device.get(CONF_DEVICE_NAME, "")
                     current_device[CONF_MANUFACTURER_CODE] = cloud_device.get("manufacturer_code") or current_device.get(CONF_MANUFACTURER_CODE, "0000")
                     current_device[CONF_CATEGORY] = cloud_device.get("category") or current_device.get(CONF_CATEGORY, "")
+                    # 如果云端有设备类型信息且当前设备类型为 0，用云端的设备类型更新
+                    if current_device[CONF_DEVICE_TYPE] == 0:
+                        cloud_type = cloud_device.get("type", 0)
+                        if cloud_type != 0:
+                            current_device[CONF_DEVICE_TYPE] = cloud_type
+                            _LOGGER.info("Updated device type from cloud: %s -> %s", device_id, hex(cloud_type))
 
                 sn = current_device.get(CONF_SN, "")
                 sn8 = current_device.get(CONF_SN8, "")
@@ -683,6 +699,11 @@ class MideaSmartHomeOptionsFlowHandler(config_entries.OptionsFlow):
 
         for did, info in self._discovered_devices.items():
             cloud_device = self._cloud_devices.get(did, {})
+            # 如果云端有设备信息且 device_type 为 0，用云端的设备类型更新
+            if info[CONF_DEVICE_TYPE] == 0 and cloud_device:
+                cloud_type = cloud_device.get("type", 0)
+                if cloud_type != 0:
+                    info[CONF_DEVICE_TYPE] = cloud_type
             device_name = cloud_device.get("name", DEVICE_TYPES.get(info[CONF_DEVICE_TYPE], f"T0x{info[CONF_DEVICE_TYPE]:02X}"))
             device_options[str(did)] = f"{device_name} ( {info[CONF_IP]} )"
 
@@ -701,6 +722,11 @@ class MideaSmartHomeOptionsFlowHandler(config_entries.OptionsFlow):
 
         for did, info in self._discovered_devices.items():
             cloud_device = self._cloud_devices.get(did, {})
+            # 如果云端有设备信息且 device_type 为 0，用云端的设备类型更新
+            if info[CONF_DEVICE_TYPE] == 0 and cloud_device:
+                cloud_type = cloud_device.get("type", 0)
+                if cloud_type != 0:
+                    info[CONF_DEVICE_TYPE] = cloud_type
             device_name = cloud_device.get("name", DEVICE_TYPES.get(info[CONF_DEVICE_TYPE], f"T0x{info[CONF_DEVICE_TYPE]:02X}"))
             device_options[str(did)] = f"{device_name} ( {info[CONF_IP]} )"
 
@@ -862,6 +888,12 @@ class MideaSmartHomeOptionsFlowHandler(config_entries.OptionsFlow):
                     current_device[CONF_DEVICE_NAME] = cloud_device.get("name") or current_device.get(CONF_DEVICE_NAME, "")
                     current_device[CONF_MANUFACTURER_CODE] = cloud_device.get("manufacturer_code") or current_device.get(CONF_MANUFACTURER_CODE, "0000")
                     current_device[CONF_CATEGORY] = cloud_device.get("category") or current_device.get(CONF_CATEGORY, "")
+                    # 如果云端有设备类型信息且当前设备类型为 0，用云端的设备类型更新
+                    if current_device[CONF_DEVICE_TYPE] == 0:
+                        cloud_type = cloud_device.get("type", 0)
+                        if cloud_type != 0:
+                            current_device[CONF_DEVICE_TYPE] = cloud_type
+                            _LOGGER.info("Updated device type from cloud: %s -> %s", device_id, hex(cloud_type))
 
                 sn = current_device.get(CONF_SN, "")
                 sn8 = current_device.get(CONF_SN8, "")

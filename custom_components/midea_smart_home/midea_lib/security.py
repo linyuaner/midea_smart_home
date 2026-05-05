@@ -9,6 +9,15 @@ from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import pad, unpad
 from Crypto.Util.strxor import strxor
 
+# 签名类型
+SIGN_TYPE_NONE = 0x00
+SIGN_TYPE_MD5 = 0x10
+
+# 加密类型
+ENCRYPT_TYPE_NONE = 0x00
+ENCRYPT_TYPE_AES_128 = 0x01
+ENCRYPT_TYPE_AES_CCM = 0x02
+
 from .exceptions import (
     CannotAuthenticate,
     DataSignDoesntMatch,
@@ -171,6 +180,66 @@ class LocalSecurity:
             )
         except ValueError:
             return bytearray(0)
+
+    def aes_encrypt(self, raw: bytes) -> bytes:
+        return AES.new(self.aes_key, AES.MODE_ECB).encrypt(pad(raw, 16))
+
+    def decrypt_with_type(self, raw: bytes, encrypt_type: int) -> bytes:
+        """根据加密类型解密数据"""
+        if encrypt_type == ENCRYPT_TYPE_NONE:
+            return raw
+        elif encrypt_type == ENCRYPT_TYPE_AES_128:
+            try:
+                return unpad(AES.new(self.aes_key, AES.MODE_ECB).decrypt(raw), 16)
+            except ValueError:
+                return b""
+        elif encrypt_type == ENCRYPT_TYPE_AES_CCM:
+            # AES-CCM 模式需要 nonce 和 tag，这里假设 raw 包含 nonce(12) + tag(16) + 密文
+            if len(raw) < 28:
+                return b""
+            nonce = raw[:12]
+            tag = raw[12:28]
+            ciphertext = raw[28:]
+            try:
+                cipher = AES.new(self.aes_key, AES.MODE_CCM, nonce=nonce)
+                return cipher.decrypt_and_verify(ciphertext, tag)
+            except (ValueError, KeyError):
+                return b""
+        else:
+            return raw
+
+    def encrypt_with_type(self, raw: bytes, encrypt_type: int) -> bytes:
+        """根据加密类型加密数据"""
+        if encrypt_type == ENCRYPT_TYPE_NONE:
+            return raw
+        elif encrypt_type == ENCRYPT_TYPE_AES_128:
+            return AES.new(self.aes_key, AES.MODE_ECB).encrypt(pad(raw, 16))
+        elif encrypt_type == ENCRYPT_TYPE_AES_CCM:
+            # AES-CCM 模式，生成 nonce 并加密
+            nonce = get_random_bytes(12)
+            cipher = AES.new(self.aes_key, AES.MODE_CCM, nonce=nonce)
+            ciphertext, tag = cipher.encrypt_and_digest(raw)
+            return nonce + tag + ciphertext
+        else:
+            return raw
+
+    def verify_signature(self, data: bytes, signature: bytes, sign_type: int) -> bool:
+        """验证签名"""
+        if sign_type == SIGN_TYPE_NONE:
+            return True
+        elif sign_type == SIGN_TYPE_MD5:
+            return md5(data).digest() == signature
+        else:
+            return True
+
+    def sign_data(self, data: bytes, sign_type: int) -> bytes:
+        """生成签名"""
+        if sign_type == SIGN_TYPE_NONE:
+            return b""
+        elif sign_type == SIGN_TYPE_MD5:
+            return md5(data).digest()
+        else:
+            return b""
 
     def aes_cbc_decrypt(self, raw: bytes, key: Buffer) -> bytes:
         return AES.new(key=key, mode=AES.MODE_CBC, iv=self.iv).decrypt(raw)

@@ -18,7 +18,14 @@ from ..const import (
     CONF_SN8,
     ProtocolVersion,
 )
-from .security import LocalSecurity
+from .security import (
+    LocalSecurity,
+    ENCRYPT_TYPE_NONE,
+    ENCRYPT_TYPE_AES_128,
+    ENCRYPT_TYPE_AES_CCM,
+    SIGN_TYPE_NONE,
+    SIGN_TYPE_MD5
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,11 +96,24 @@ def _parse_v2_v3_response(data: bytes, addr: tuple, security: LocalSecurity) -> 
         return None
 
     device_id = int.from_bytes(inner_data[20:26], "little")
-    encrypt_data = inner_data[40:-16]
-    if len(encrypt_data) < 16:
+    
+    # 第 40 个字节是加密类型和签名类型字节
+    if len(inner_data) < 41:
         return None
-
-    reply = security.aes_decrypt(encrypt_data)
+    crypto_byte = inner_data[40]
+    sign_type = crypto_byte & 0xF0
+    encrypt_type = crypto_byte & 0x0F
+    
+    # 获取加密数据（从第 41 字节开始，到倒数第 16 字节结束）
+    encrypt_data = inner_data[41:-16]
+    
+    # 验证签名
+    signature = inner_data[-16:]
+    if not security.verify_signature(inner_data[:-16], signature, sign_type):
+        return None
+    
+    # 根据加密类型解密数据
+    reply = security.decrypt_with_type(encrypt_data, encrypt_type)
     if len(reply) < 41:
         return None
 

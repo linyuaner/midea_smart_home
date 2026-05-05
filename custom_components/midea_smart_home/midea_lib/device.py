@@ -8,7 +8,14 @@ import time
 from collections.abc import Callable
 from typing import Any, Optional
 
-from .security import LocalSecurity
+from .security import (
+    LocalSecurity,
+    ENCRYPT_TYPE_NONE,
+    ENCRYPT_TYPE_AES_128,
+    ENCRYPT_TYPE_AES_CCM,
+    SIGN_TYPE_NONE,
+    SIGN_TYPE_MD5
+)
 from .packet_builder import PacketBuilder
 from .exceptions import CannotAuthenticate, DataUnexpectedLength, MessageWrongFormat
 from .lua import MideaCodec
@@ -221,9 +228,23 @@ class DeviceController(threading.Thread):
                     payload_type = message[2] + (message[3] << 8)
 
                     if payload_type not in [0x1001, 0x0001]:
-                        cryptographic = bytes(message[40:-16])
-                        if payload_len % 16 == 0:
-                            decrypted = self._security.aes_decrypt(cryptographic)
+                        # 第 40 个字节是加密类型和签名类型字节
+                        crypto_byte = message[40]
+                        sign_type = crypto_byte & 0xF0
+                        encrypt_type = crypto_byte & 0x0F
+                        
+                        # 获取加密数据（从第 41 字节开始，到倒数第 16 字节结束）
+                        cryptographic = bytes(message[41:-16])
+                        
+                        # 验证签名
+                        signature = bytes(message[-16:])
+                        if not self._security.verify_signature(message[:-16], signature, sign_type):
+                            _LOGGER.debug("Signature verification failed")
+                            continue
+                        
+                        # 根据加密类型解密数据
+                        decrypted = self._security.decrypt_with_type(cryptographic, encrypt_type)
+                        if decrypted:
                             receive_time = time.time()
                             status = self._codec.decode_status(decrypted.hex())
                             if status:

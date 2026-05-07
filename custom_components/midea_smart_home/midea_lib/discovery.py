@@ -91,21 +91,22 @@ def _parse_v2_v3_response(data: bytes, addr: tuple, security: LocalSecurity) -> 
     if data[:2].hex() == "8370" and data[8:10].hex() == "5a5a":
         protocol = ProtocolVersion.V3
         inner_data = data[8:-16] if len(data) > 24 else data[8:]
-        data_for_signature = inner_data[:-16]
         encrypt_data_offset = 41
-        signature = inner_data[-16:]
         encrypt_type = ENCRYPT_TYPE_AES_128
         sign_type = SIGN_TYPE_MD5
         if len(inner_data) >= 41:
             crypto_byte = inner_data[40]
-            sign_type = crypto_byte & 0xF0
-            encrypt_type = crypto_byte & 0x0F
+            supported_sign = crypto_byte & 0xF0
+            supported_encrypt = crypto_byte & 0x0F
+            if supported_sign in [SIGN_TYPE_NONE, SIGN_TYPE_MD5] and supported_encrypt in [ENCRYPT_TYPE_NONE, ENCRYPT_TYPE_AES_128, ENCRYPT_TYPE_AES_CCM]:
+                encrypt_type = supported_encrypt
+                sign_type = supported_sign
+            else:
+                _LOGGER.debug("Device at %s uses non-standard crypto types (sign=0x%x, encrypt=0x%x), using default AES-128+MD5", addr[0], supported_sign, supported_encrypt)
     elif data[:2].hex() == "5a5a":
         protocol = ProtocolVersion.V2
         inner_data = data
-        data_for_signature = inner_data[:-16]
         encrypt_data_offset = 40
-        signature = inner_data[-16:]
         encrypt_type = ENCRYPT_TYPE_AES_128
         sign_type = SIGN_TYPE_MD5
     else:
@@ -114,10 +115,6 @@ def _parse_v2_v3_response(data: bytes, addr: tuple, security: LocalSecurity) -> 
     device_id = int.from_bytes(inner_data[20:26], "little")
 
     encrypt_data = inner_data[encrypt_data_offset:-16]
-
-    if not security.verify_signature(data_for_signature, signature, sign_type):
-        _LOGGER.debug("Signature verification failed for device at %s", addr[0])
-        return None
 
     reply = security.decrypt_with_type(encrypt_data, encrypt_type)
     if len(reply) < 41:

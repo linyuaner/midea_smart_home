@@ -27,6 +27,8 @@ CONF_MANUFACTURER_CODE = "manufacturer_code"
 CONF_DEVICE_NAME = "device_name"
 CONF_PROTOCOL = "protocol"
 CONF_CATEGORY = "category"
+CONF_ENCRYPT_TYPE = "encrypt_type"
+CONF_SIGN_TYPE = "sign_type"
 
 DEFAULT_PORT = 6444
 

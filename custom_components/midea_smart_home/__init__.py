@@ -90,6 +90,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         category = device_data.get(CONF_CATEGORY, "")
         protocol = device_data.get(CONF_PROTOCOL, ProtocolVersion.V3)
+        encrypt_type = device_data.get(CONF_ENCRYPT_TYPE, ENCRYPT_TYPE_AES_128)
+        sign_type = device_data.get(CONF_SIGN_TYPE, SIGN_TYPE_MD5)
 
         lua_common_dir = str(Path(hass.config.config_dir) / LUA_COMMON_PATH)
 
@@ -130,6 +132,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 centralized=centralized,
                 default_values=default_values,
                 category=category,
+                encrypt_type=encrypt_type,
+                sign_type=sign_type,
             )
             device.open()
             import time

@@ -12,8 +12,10 @@ from defusedxml import ElementTree
 from ..const import (
     CONF_DEVICE_ID,
     CONF_DEVICE_TYPE,
+    CONF_ENCRYPT_TYPE,
     CONF_IP,
     CONF_PROTOCOL,
+    CONF_SIGN_TYPE,
     CONF_SN,
     CONF_SN8,
     ProtocolVersion,
@@ -139,6 +141,8 @@ def _parse_v2_v3_response(data: bytes, addr: tuple, security: LocalSecurity) -> 
         CONF_SN: sn,
         CONF_SN8: sn8,
         CONF_PROTOCOL: protocol,
+        CONF_ENCRYPT_TYPE: encrypt_type,
+        CONF_SIGN_TYPE: sign_type,
     }
 
 def _parse_scan_address(scan_address: str) -> list:

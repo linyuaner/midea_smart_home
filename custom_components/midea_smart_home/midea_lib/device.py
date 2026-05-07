@@ -48,7 +48,9 @@ class DeviceController(threading.Thread):
         token: str,
         key: str,
         codec: MideaCodec,
-        protocol: int = 3
+        protocol: int = 3,
+        encrypt_type: int = ENCRYPT_TYPE_AES_128,
+        sign_type: int = SIGN_TYPE_MD5,
     ):
         threading.Thread.__init__(self)
         self._device_id = device_id
@@ -58,8 +60,8 @@ class DeviceController(threading.Thread):
         self._key = key
         self._codec = codec
         self._protocol = protocol
-        self._encrypt_type = ENCRYPT_TYPE_AES_128
-        self._sign_type = SIGN_TYPE_MD5
+        self._encrypt_type = encrypt_type
+        self._sign_type = sign_type
         self._security: Optional[LocalSecurity] = None
         self._sock: Optional[socket.socket] = None
         self._lock = threading.Lock()
@@ -436,6 +438,8 @@ class MideaDevice:
         centralized: Optional[list[str]] = None,
         default_values: Optional[dict] = None,
         category: str = "",
+        encrypt_type: int = ENCRYPT_TYPE_AES_128,
+        sign_type: int = SIGN_TYPE_MD5,
     ):
         self._device_id = device_id
         self._device_type = device_type
@@ -468,6 +472,8 @@ class MideaDevice:
             key=key,
             codec=self._codec,
             protocol=protocol,
+            encrypt_type=encrypt_type,
+            sign_type=sign_type,
         )
 
         self._data = {}

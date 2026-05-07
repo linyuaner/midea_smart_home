@@ -235,19 +235,26 @@ class DeviceController(threading.Thread):
                     payload_type = message[2] + (message[3] << 8)
 
                     if payload_type not in [0x1001, 0x0001]:
-                        # 第 40 个字节是加密类型和签名类型字节
-                        crypto_byte = message[40]
-                        sign_type = crypto_byte & 0xF0
-                        encrypt_type = crypto_byte & 0x0F
-                        
-                        # 获取加密数据（从第 41 字节开始，到倒数第 16 字节结束）
-                        cryptographic = bytes(message[41:-16])
-                        
-                        # 验证签名
-                        signature = bytes(message[-16:])
-                        if not self._security.verify_signature(message[:-16], signature, sign_type):
-                            _LOGGER.debug("Signature verification failed")
-                            continue
+                        # 获取加密数据
+                        if self._protocol == 3:
+                            # V3 协议：第 40 个字节是加密类型和签名类型字节
+                            if len(message) < 41:
+                                continue
+                            crypto_byte = message[40]
+                            sign_type = crypto_byte & 0xF0
+                            encrypt_type = crypto_byte & 0x0F
+                            cryptographic = bytes(message[41:-16])
+                            
+                            # 验证签名
+                            signature = bytes(message[-16:])
+                            if not self._security.verify_signature(message[:-16], signature, sign_type):
+                                _LOGGER.debug("Signature verification failed")
+                                continue
+                        else:
+                            # V2 协议：默认使用 AES-128 和 MD5 签名
+                            encrypt_type = ENCRYPT_TYPE_AES_128
+                            sign_type = SIGN_TYPE_MD5
+                            cryptographic = bytes(message[40:-16])
                         
                         # 根据加密类型解密数据
                         decrypted = self._security.decrypt_with_type(cryptographic, encrypt_type)
@@ -302,11 +309,7 @@ class DeviceController(threading.Thread):
         sock = self._sock
         if sock and self._connected:
             try:
-                msg = PacketBuilder(self._device_id, bytearray([0x00])).finalize(
-                    msg_type=0,
-                    encrypt_type=self._encrypt_type,
-                    sign_type=self._sign_type
-                )
+                msg = PacketBuilder(self._device_id, bytearray([0x00])).finalize(msg_type=0)
                 if self._protocol == 3:
                     encrypted = self._security.encode_8370(msg, 0x6)
                     sock.send(encrypted)

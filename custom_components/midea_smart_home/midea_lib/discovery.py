@@ -91,34 +91,37 @@ def _parse_v2_v3_response(data: bytes, addr: tuple, security: LocalSecurity) -> 
     if data[:2].hex() == "8370" and data[8:10].hex() == "5a5a":
         protocol = ProtocolVersion.V3
         inner_data = data[8:-16] if len(data) > 24 else data[8:]
+        data_for_signature = inner_data[:-16]
+        encrypt_data_offset = 41
+        signature = inner_data[-16:]
+        encrypt_type = ENCRYPT_TYPE_AES_128
+        sign_type = SIGN_TYPE_MD5
+        if len(inner_data) >= 41:
+            crypto_byte = inner_data[40]
+            sign_type = crypto_byte & 0xF0
+            encrypt_type = crypto_byte & 0x0F
     elif data[:2].hex() == "5a5a":
         protocol = ProtocolVersion.V2
         inner_data = data
+        data_for_signature = inner_data[:-16]
+        encrypt_data_offset = 40
+        signature = inner_data[-16:]
+        encrypt_type = ENCRYPT_TYPE_AES_128
+        sign_type = SIGN_TYPE_MD5
     else:
         return None
 
     device_id = int.from_bytes(inner_data[20:26], "little")
-    
-    # 第 40 个字节是加密类型和签名类型字节（V3 协议支持，V2 可能不支持）
-    encrypt_type = ENCRYPT_TYPE_AES_128  # 默认使用 AES-128
-    sign_type = SIGN_TYPE_MD5  # 默认使用 MD5 签名
-    
-    if len(inner_data) >= 41:
-        crypto_byte = inner_data[40]
-        sign_type = crypto_byte & 0xF0
-        encrypt_type = crypto_byte & 0x0F
-    
-    # 获取加密数据（从第 41 字节开始，到倒数第 16 字节结束）
-    encrypt_data = inner_data[41:-16]
-    
-    # 验证签名
-    signature = inner_data[-16:]
-    if not security.verify_signature(inner_data[:-16], signature, sign_type):
+
+    encrypt_data = inner_data[encrypt_data_offset:-16]
+
+    if not security.verify_signature(data_for_signature, signature, sign_type):
+        _LOGGER.debug("Signature verification failed for device at %s", addr[0])
         return None
-    
-    # 根据加密类型解密数据
+
     reply = security.decrypt_with_type(encrypt_data, encrypt_type)
     if len(reply) < 41:
+        _LOGGER.debug("Decrypted data too short for device at %s", addr[0])
         return None
 
     sn = reply[8:40].decode("utf-8", errors="ignore").rstrip('\x00')

@@ -58,6 +58,8 @@ class DeviceController(threading.Thread):
         self._key = key
         self._codec = codec
         self._protocol = protocol
+        self._encrypt_type = ENCRYPT_TYPE_AES_128
+        self._sign_type = SIGN_TYPE_MD5
         self._security: Optional[LocalSecurity] = None
         self._sock: Optional[socket.socket] = None
         self._lock = threading.Lock()
@@ -93,6 +95,11 @@ class DeviceController(threading.Thread):
     @property
     def available(self) -> bool:
         return self._available
+
+    def set_crypto_types(self, encrypt_type: int, sign_type: int) -> None:
+        """设置加密类型和签名类型"""
+        self._encrypt_type = encrypt_type
+        self._sign_type = sign_type
 
     def register_update(self, update: Callable[[dict[str, Any]], None]) -> None:
         self._updates.append(update)
@@ -277,7 +284,10 @@ class DeviceController(threading.Thread):
 
         try:
             data_bytes = bytes.fromhex(data_hex)
-            packet = PacketBuilder(self._device_id, data_bytes).finalize()
+            packet = PacketBuilder(self._device_id, data_bytes).finalize(
+                encrypt_type=self._encrypt_type,
+                sign_type=self._sign_type
+            )
 
             if self._protocol == 3:
                 encrypted = self._security.encode_8370(bytes(packet), 0x6)
@@ -292,7 +302,11 @@ class DeviceController(threading.Thread):
         sock = self._sock
         if sock and self._connected:
             try:
-                msg = PacketBuilder(self._device_id, bytearray([0x00])).finalize(msg_type=0)
+                msg = PacketBuilder(self._device_id, bytearray([0x00])).finalize(
+                    msg_type=0,
+                    encrypt_type=self._encrypt_type,
+                    sign_type=self._sign_type
+                )
                 if self._protocol == 3:
                     encrypted = self._security.encode_8370(msg, 0x6)
                     sock.send(encrypted)
@@ -497,6 +511,10 @@ class MideaDevice:
     @property
     def controller(self):
         return self._controller
+
+    def set_crypto_types(self, encrypt_type: int, sign_type: int) -> None:
+        """设置加密类型和签名类型"""
+        self._controller.set_crypto_types(encrypt_type, sign_type)
 
     def open(self):
         self._controller.open()

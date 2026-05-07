@@ -115,6 +115,12 @@ def _parse_v2_v3_response(data: bytes, addr: tuple, security: LocalSecurity) -> 
     device_id = int.from_bytes(inner_data[20:26], "little")
 
     encrypt_data = inner_data[encrypt_data_offset:-16]
+    signature = inner_data[-16:]
+    data_for_signature = inner_data[:-16]
+
+    if not security.verify_signature(data_for_signature, signature, sign_type):
+        _LOGGER.debug("Signature verification failed for device at %s", addr[0])
+        return None
 
     reply = security.decrypt_with_type(encrypt_data, encrypt_type)
     if len(reply) < 41:
